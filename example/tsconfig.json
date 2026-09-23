@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-cutout": ["../src/index"],
+      "expo-cutout/*": ["../src/*"]
+    }
+  }
+}
