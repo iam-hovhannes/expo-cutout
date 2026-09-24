@@ -17,11 +17,6 @@ An **iOS-only** Expo Module that uses [`VNGenerateForegroundInstanceMaskRequest`
 npm install expo-cutout
 ```
 
-> Not published to npm yet — use a local `file:` reference:
-> ```sh
-> npm install "file:../expo-cutout"
-> ```
-
 Add the config plugin to your `app.json` / `app.config.js`:
 
 ```json
@@ -86,17 +81,19 @@ Non-iOS platforms throw a plain `Error` before touching native.
 ```
 Load image
    ↓
-Downscale to maxDimension (Lanczos via UIGraphicsImageRenderer)
+Normalize orientation to .up (bake EXIF / UIImage orientation into pixels)
+   ↓
+Downscale to maxDimension if needed (UIGraphicsImageRenderer)
    ↓
 VNGenerateForegroundInstanceMaskRequest (iOS 17 Vision)
    ↓
 generateScaledMaskForImage (CVPixelBuffer → CIImage)
    ↓
-CIGaussianBlur ~1.5 px (soft edge feather)
+Refine mask: morphology erode → contrast boost → light Gaussian blur ~0.6 px
    ↓
-CIBlendWithMask (source + feathered mask + empty background)
+CIBlendWithMask (source + refined mask + transparent background)
    ↓
-CIContext → CGImage → UIImage.pngData()
+CIContext → CGImage → UIImage.pngData() (orientation .up)
    ↓
 Write cutout-<uuid>.png to tmp dir
    ↓
