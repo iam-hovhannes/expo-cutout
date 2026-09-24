@@ -2,9 +2,18 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-jsx",
     "paths": {
-      "expo-cutout": ["../src/index"],
-      "expo-cutout/*": ["../src/*"]
+      "expo-cutout": [
+        "../src/index"
+      ],
+      "expo-cutout/*": [
+        "../src/*"
+      ]
     }
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
 }

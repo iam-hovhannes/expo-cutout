@@ -1,7 +1,9 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-declare class ExpoCutoutModule extends NativeModule<{}> {
-  setValueAsync(value: string): Promise<void>;
+import type { CutoutOptions, CutoutResult } from './ExpoCutout.types';
+
+declare class ExpoCutoutModule extends NativeModule {
+  cutout(uri: string, options: CutoutOptions): Promise<CutoutResult>;
 }
 
 export default requireNativeModule<ExpoCutoutModule>('ExpoCutout');

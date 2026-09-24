@@ -1,6 +1,6 @@
 import { registerWebModule, NativeModule } from 'expo';
 
-// ExpoCutoutModule is not available on the web platform.
-class ExpoCutoutModule extends NativeModule<{}> {}
+// expo-cutout is not available on the web platform.
+class ExpoCutoutModule extends NativeModule {}
 
 export default registerWebModule(ExpoCutoutModule, 'ExpoCutoutModule');

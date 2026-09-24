@@ -3,13 +3,26 @@
     "name": "expo-cutout-example",
     "slug": "expo-cutout-example",
     "version": "1.0.0",
+    "plugins": [
+      "expo-cutout",
+      ["expo-image-picker", { "photosPermission": "Choose a photo to remove its background." }],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Save cutout images to your photo library.",
+          "savePhotosPermission": "Allow saving transparent cutouts to your gallery.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "expo.modules.cutout.example",
-      "appleTeamId": "4JF43672AY"
+      "appleTeamId": "4JF43672AY",
+      "deploymentTarget": "17.0"
     },
     "android": {
       "adaptiveIcon": {
