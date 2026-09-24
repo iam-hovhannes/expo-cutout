@@ -45,7 +45,9 @@ public class ExpoCutoutModule: Module {
       throw CutoutError.decode("Cannot decode image at: \(rawPath)")
     }
 
-    // --- 3. Downscale if needed ---
+    // --- 3. Normalize orientation, then downscale if needed ---
+    // UIImage.cgImage is often the raw bitmap without EXIF applied. Bake to .up
+    // for every size so Vision and compositing always see upright pixels.
     let maxDimension: CGFloat
     if let md = options?["maxDimension"] as? Double, md > 0 {
       maxDimension = CGFloat(md)
@@ -53,8 +55,9 @@ public class ExpoCutoutModule: Module {
       maxDimension = 2048
     }
 
+    let uprightImage = try normalizedUpOriented(sourceImage)
     let (workingImage, outputWidth, outputHeight) = try downscaleIfNeeded(
-      image: sourceImage,
+      image: uprightImage,
       maxDimension: maxDimension
     )
 
@@ -186,6 +189,31 @@ public class ExpoCutoutModule: Module {
   }
 
   // MARK: - Helpers
+
+  /// Bakes `imageOrientation` into pixel data so `.cgImage` matches what the user sees.
+  private static func normalizedUpOriented(_ image: UIImage) throws -> UIImage {
+    if image.imageOrientation == .up, image.cgImage != nil {
+      return image
+    }
+
+    let pixelW = image.size.width * image.scale
+    let pixelH = image.size.height * image.scale
+    let pixelSize = CGSize(width: pixelW, height: pixelH)
+
+    let format = UIGraphicsImageRendererFormat()
+    format.opaque = false
+    format.scale = 1
+
+    let renderer = UIGraphicsImageRenderer(size: pixelSize, format: format)
+    let normalized = renderer.image { _ in
+      image.draw(in: CGRect(origin: .zero, size: pixelSize))
+    }
+
+    guard normalized.cgImage != nil else {
+      throw CutoutError.decode("Could not normalize image orientation")
+    }
+    return normalized
+  }
 
   private static func downscaleIfNeeded(
     image: UIImage,
