@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import type { CutoutOptions, CutoutResult } from './ExpoCutout.types';
-import ExpoCutoutModule from './ExpoCutoutModule';
+import { getExpoCutoutModule } from './ExpoCutoutModule';
 
 /**
  * Remove a background from a local image using iOS 17+ Vision instance masking.
@@ -41,5 +41,5 @@ export async function cutout(uri: string, options?: CutoutOptions): Promise<Cuto
     maxDimension: options?.maxDimension ?? 2048,
   };
 
-  return ExpoCutoutModule.cutout(uri, resolvedOptions);
+  return getExpoCutoutModule().cutout(uri, resolvedOptions);
 }
