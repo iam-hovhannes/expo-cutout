@@ -1,7 +1,7 @@
 {
   "name": "expo-cutout",
   "version": "0.1.0",
-  "description": "iOS Vision-based image cutout",
+  "description": "Remove image backgrounds on iOS with Apple Vision (foreground mask → transparent PNG). Expo module, iOS 17+",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "expo-module": "expo-module.config.json",
@@ -25,8 +25,14 @@
   "keywords": [
     "react-native",
     "expo",
-    "expo-cutout",
-    "ExpoCutout"
+    "ios",
+    "background-removal",
+    "remove-background",
+    "image-cutout",
+    "foreground-mask",
+    "vision",
+    "transparent-png",
+    "segmentation"
   ],
   "repository": "https://github.com/iam-hovhannes/expo-cutout",
   "bugs": {
