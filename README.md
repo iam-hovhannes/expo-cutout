@@ -103,7 +103,16 @@ Resolve { uri, width, height }
 ## Notes
 
 - Input **must** be a local `file://` URI. Copy remote images or picker results with `copyToCacheDirectory: true` before calling `cutout`.
-- Output is written to `FileManager.default.temporaryDirectory`. Clean up if needed.
+- Output is a temp PNG under `FileManager.default.temporaryDirectory` (`cutout-<uuid>.png`). **`cutout` does not delete it** — your app owns the URI lifetime. After you persist or discard the result, delete the temp file yourself, for example with [`expo-file-system`](https://docs.expo.dev/versions/latest/sdk/filesystem/):
+
+  ```ts
+  import { File } from 'expo-file-system';
+
+  const result = await cutout(localFileUri);
+  // …show preview, then copy/upload/save to permanent storage…
+  new File(result.uri).delete(); // safe once you no longer need the temp PNG
+  ```
+
 - Android is not supported (iOS-only platforms in `expo-module.config.json`).
 
 ## License
