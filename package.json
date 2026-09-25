@@ -1,6 +1,6 @@
 {
   "name": "expo-cutout",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "On-device background removal for Expo. Apple Vision on iOS 17+ turns a local photo into a transparent PNG. No server, no API key. Dev Client required.",
   "main": "build/index.js",
   "types": "build/index.d.ts",

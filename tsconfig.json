@@ -30,7 +30,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": false,
     "rootDir": "./src",
-    "outDir": "./build"
+    "outDir": "./build",
+    "noEmit": false
   },
   "include": [
     "./src"
