@@ -21,7 +21,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "expo.modules.cutout.example",
-      "appleTeamId": "4JF43672AY",
       "deploymentTarget": "17.0"
     },
     "android": {
