@@ -1,6 +1,17 @@
-# expo-cutout
+# Remove image backgrounds in Expo (iOS)
 
-An **iOS-only** Expo Module that uses [`VNGenerateForegroundInstanceMaskRequest`](https://developer.apple.com/documentation/vision/vngenerateforegroundinstancemaskrequest) (Vision, iOS 17+) to remove image backgrounds and return a transparent PNG.
+`expo-cutout` removes the background from a local photo and returns a transparent PNG. It runs on device with Apple Vision on iOS 17+. No API key, no upload.
+
+**iOS only.** Android is not supported. Requires an Expo Dev Client or prebuild (not Expo Go).
+
+## Why use this
+
+- On-device subject cutout for a sticker, product shot, or transparent PNG
+- No API key and no image upload
+- One call: `cutout(fileUri)` returns `{ uri, width, height }`
+- Config plugin for Expo Dev Client / prebuild (not Expo Go)
+
+Under the hood it uses [`VNGenerateForegroundInstanceMaskRequest`](https://developer.apple.com/documentation/vision/vngenerateforegroundinstancemaskrequest).
 
 ## Requirements
 

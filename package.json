@@ -1,7 +1,7 @@
 {
   "name": "expo-cutout",
   "version": "0.1.0",
-  "description": "Remove image backgrounds on iOS with Apple Vision (foreground mask → transparent PNG). Expo module, iOS 17+",
+  "description": "On-device background removal for Expo. Apple Vision on iOS 17+ turns a local photo into a transparent PNG. No server, no API key. Dev Client required.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "expo-module": "expo-module.config.json",
@@ -23,18 +23,23 @@
     "open:android": "node internal/module_scripts/open-android.js"
   },
   "keywords": [
-    "react-native",
     "expo",
-    "ios",
+    "react-native",
+    "expo-module",
     "background-removal",
+    "background-remover",
     "remove-background",
-    "image-cutout",
-    "foreground-mask",
-    "vision",
     "transparent-png",
-    "segmentation"
+    "transparent-background",
+    "image-cutout",
+    "subject-segmentation",
+    "apple-vision",
+    "on-device"
   ],
-  "repository": "https://github.com/iam-hovhannes/expo-cutout",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iam-hovhannes/expo-cutout.git"
+  },
   "bugs": {
     "url": "https://github.com/iam-hovhannes/expo-cutout/issues"
   },
