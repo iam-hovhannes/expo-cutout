@@ -1,71 +1,42 @@
 import React, { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { COLORS } from '../constants/theme';
 
 interface ActionButtonsProps {
-  onPickDefault: () => void;
-  onPickFullRes: () => void;
+  onUpload: () => void;
   disabled?: boolean;
 }
 
 export const ActionButtons = memo(function ActionButtons({
-  onPickDefault,
-  onPickFullRes,
+  onUpload,
   disabled = false,
 }: ActionButtonsProps) {
   return (
-    <View style={styles.row}>
-      <Pressable
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel="Pick image with default 2048px limit"
-        style={({ pressed }) => [
-          styles.btn,
-          styles.btnBlue,
-          disabled && styles.btnDisabled,
-          pressed && styles.btnPressed,
-        ]}
-        onPress={onPickDefault}>
-        <Text style={styles.btnText}>Pick image{'\n'}(default 2 048 px)</Text>
-      </Pressable>
-
-      <Pressable
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel="Pick image at full resolution"
-        style={({ pressed }) => [
-          styles.btn,
-          styles.btnGreen,
-          disabled && styles.btnDisabled,
-          pressed && styles.btnPressed,
-        ]}
-        onPress={onPickFullRes}>
-        <Text style={styles.btnText}>Pick image{'\n'}(full resolution)</Text>
-      </Pressable>
-    </View>
+    <Pressable
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel="Upload image"
+      style={({ pressed }) => [
+        styles.btn,
+        disabled && styles.btnDisabled,
+        pressed && styles.btnPressed,
+      ]}
+      onPress={onUpload}>
+      <Text style={styles.btnText}>Upload image</Text>
+    </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
   btn: {
-    flex: 1,
+    backgroundColor: COLORS.tint,
     borderRadius: 14,
     paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  btnBlue: {
-    backgroundColor: COLORS.tint,
-  },
-  btnGreen: {
-    backgroundColor: COLORS.success,
+    marginBottom: 24,
   },
   btnDisabled: {
     opacity: 0.5,
@@ -76,7 +47,7 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
   },
 });

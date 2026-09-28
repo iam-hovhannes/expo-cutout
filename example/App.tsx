@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ActionButtons } from './src/components/ActionButtons';
@@ -15,15 +15,12 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar hidden />
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <Header />
           <PlatformWarning />
-          <ActionButtons
-            disabled={phase.kind === 'loading'}
-            onPickDefault={() => pickAndCutout()}
-            onPickFullRes={() => pickAndCutout(Number.MAX_SAFE_INTEGER)}
-          />
+          <ActionButtons disabled={phase.kind === 'loading'} onUpload={() => pickAndCutout()} />
 
           {(phase.kind === 'loading' || phase.kind === 'error') && <StatusCard phase={phase} />}
 

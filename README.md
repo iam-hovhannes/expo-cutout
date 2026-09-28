@@ -4,6 +4,12 @@
 
 **iOS only.** Android is not supported. Requires an Expo Dev Client or prebuild (not Expo Go).
 
+## Example
+
+<p align="center">
+  <img src="./example/assets/gif/expo-cutout.gif" alt="Example app: upload a photo, remove the background, and show the transparent cutout" width="240" />
+</p>
+
 ## Why use this
 
 - On-device subject cutout for a sticker, product shot, or transparent PNG

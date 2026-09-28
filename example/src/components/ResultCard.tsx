@@ -20,13 +20,13 @@ export const ResultCard = memo(function ResultCard({
 }: ResultCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionLabel}>Result</Text>
-      <Text style={styles.metaText}>
+      {/* <Text style={styles.sectionLabel}>Result</Text> */}
+      {/* <Text style={styles.metaText}>
         {result.width} × {result.height} px
       </Text>
       <Text style={styles.uriText} numberOfLines={2} selectable>
         {result.uri}
-      </Text>
+      </Text> */}
 
       <View style={styles.previewRow}>
         {/* Original */}
