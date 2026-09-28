@@ -124,7 +124,9 @@ public class ExpoCutoutModule: Module {
     }
 
     // --- 8. Render PNG with explicit alpha ---
-    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    // Match the CGImage that entered the composite so P3 samples are not
+    // converted to sRGB (which reapplies the transfer curve and lifts midtones).
+    let colorSpace = outputColorSpace(of: cgSource)
     let context = CIContext(options: [
       .workingColorSpace: colorSpace,
       .outputColorSpace: colorSpace,
@@ -190,6 +192,59 @@ public class ExpoCutoutModule: Module {
 
   // MARK: - Helpers
 
+  /// Source profile when it can tag a bitmap; sRGB for untagged or non-output spaces.
+  private static func outputColorSpace(of cgImage: CGImage) -> CGColorSpace {
+    if let space = cgImage.colorSpace, space.supportsOutput {
+      return space
+    }
+    return CGColorSpace(name: CGColorSpace.sRGB)!
+  }
+
+  /// Draws into an 8-bit context in the source color space so the CGImage stays tagged with it.
+  private static func redrawInSourceColorSpace(
+    _ image: UIImage,
+    width: Int,
+    height: Int,
+    failure: String
+  ) throws -> UIImage {
+    guard width > 0, height > 0 else {
+      throw CutoutError.decode(failure)
+    }
+
+    let colorSpace: CGColorSpace
+    if let cgImage = image.cgImage {
+      colorSpace = outputColorSpace(of: cgImage)
+    } else {
+      colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    }
+
+    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+      | CGBitmapInfo.byteOrder32Big.rawValue
+    guard let context = CGContext(
+      data: nil,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: bitmapInfo
+    ) else {
+      throw CutoutError.decode(failure)
+    }
+
+    // UIImage.draw expects a top-left origin, matching UIGraphicsImageRenderer.
+    context.translateBy(x: 0, y: CGFloat(height))
+    context.scaleBy(x: 1, y: -1)
+    UIGraphicsPushContext(context)
+    image.draw(in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+    UIGraphicsPopContext()
+
+    guard let rendered = context.makeImage() else {
+      throw CutoutError.decode(failure)
+    }
+    return UIImage(cgImage: rendered, scale: 1, orientation: .up)
+  }
+
   /// Bakes `imageOrientation` into pixel data so `.cgImage` matches what the user sees.
   private static func normalizedUpOriented(_ image: UIImage) throws -> UIImage {
     if image.imageOrientation == .up, image.cgImage != nil {
@@ -198,21 +253,12 @@ public class ExpoCutoutModule: Module {
 
     let pixelW = image.size.width * image.scale
     let pixelH = image.size.height * image.scale
-    let pixelSize = CGSize(width: pixelW, height: pixelH)
-
-    let format = UIGraphicsImageRendererFormat()
-    format.opaque = false
-    format.scale = 1
-
-    let renderer = UIGraphicsImageRenderer(size: pixelSize, format: format)
-    let normalized = renderer.image { _ in
-      image.draw(in: CGRect(origin: .zero, size: pixelSize))
-    }
-
-    guard normalized.cgImage != nil else {
-      throw CutoutError.decode("Could not normalize image orientation")
-    }
-    return normalized
+    return try redrawInSourceColorSpace(
+      image,
+      width: Int(pixelW.rounded()),
+      height: Int(pixelH.rounded()),
+      failure: "Could not normalize image orientation"
+    )
   }
 
   private static func downscaleIfNeeded(
@@ -230,16 +276,12 @@ public class ExpoCutoutModule: Module {
     let scale = maxDimension / longEdge
     let newW = (originalW * scale).rounded()
     let newH = (originalH * scale).rounded()
-    let newSize = CGSize(width: newW, height: newH)
-
-    let format = UIGraphicsImageRendererFormat()
-    format.opaque = false
-    format.scale = 1
-
-    let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-    let scaled = renderer.image { _ in
-      image.draw(in: CGRect(origin: .zero, size: newSize))
-    }
+    let scaled = try redrawInSourceColorSpace(
+      image,
+      width: Int(newW),
+      height: Int(newH),
+      failure: "Could not downscale image"
+    )
 
     return (scaled, Int(newW), Int(newH))
   }
