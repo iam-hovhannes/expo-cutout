@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name           = 'ExpoCutout'
-  s.version        = '0.1.3'
+  s.version        = '0.1.4'
   s.summary        = 'iOS Vision-based foreground cutout (transparent PNG) for Expo'
   s.description    = 'Expo Module that uses VNGenerateForegroundInstanceMaskRequest (iOS 17+) to remove image backgrounds and return a transparent PNG.'
   s.author         = 'iam-hovhannes'

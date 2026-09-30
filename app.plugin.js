@@ -28,4 +28,4 @@ const withExpoCutout = (config) => {
   return config;
 };
 
-module.exports = createRunOncePlugin(withExpoCutout, 'expo-cutout', '0.1.3');
+module.exports = createRunOncePlugin(withExpoCutout, 'expo-cutout', '0.1.4');
