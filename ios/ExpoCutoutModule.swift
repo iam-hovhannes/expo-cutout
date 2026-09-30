@@ -3,6 +3,8 @@ import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
+import ImageIO
+import UniformTypeIdentifiers
 
 public class ExpoCutoutModule: Module {
   public func definition() -> ModuleDefinition {
@@ -25,7 +27,23 @@ public class ExpoCutoutModule: Module {
   // MARK: - Pipeline
 
   private static func performCutout(uri: String, options: [String: Any]?) throws -> [String: Any] {
-    // --- 1. Parse URI ---
+    let path = try resolveFilePath(from: uri)
+    let maxDim = (options?["maxDimension"] as? Double).flatMap { $0 > 0 ? CGFloat($0) : nil } ?? 2048
+    let (cgSource, width, height) = try loadAndPrepare(path: path, maxDimension: maxDim)
+    let maskCG = try generateForegroundMask(for: cgSource, width: width, height: height)
+    let outputCG = try applyMaskToSource(cgSource, mask: maskCG, width: width, height: height)
+    let outURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("cutout-\(UUID().uuidString).png")
+    try writePNG(outputCG, to: outURL)
+    return [
+      "uri": outURL.absoluteString,
+      "width": width,
+      "height": height,
+    ]
+  }
+
+  /// Strips a `file://` URI and checks that the path exists on disk.
+  private static func resolveFilePath(from uri: String) throws -> String {
     let rawPath: String
     if uri.hasPrefix("file://") {
       guard let url = URL(string: uri), let path = url.path.removingPercentEncoding else {
@@ -39,20 +57,16 @@ public class ExpoCutoutModule: Module {
     guard !rawPath.isEmpty, FileManager.default.fileExists(atPath: rawPath) else {
       throw CutoutError.invalidURI("File not found at path: \(rawPath)")
     }
+    return rawPath
+  }
 
-    // --- 2. Load ---
-    guard let sourceImage = UIImage(contentsOfFile: rawPath) else {
-      throw CutoutError.decode("Cannot decode image at: \(rawPath)")
-    }
-
-    // --- 3. Normalize orientation, then downscale if needed ---
-    // UIImage.cgImage is often the raw bitmap without EXIF applied. Bake to .up
-    // for every size so Vision and compositing always see upright pixels.
-    let maxDimension: CGFloat
-    if let md = options?["maxDimension"] as? Double, md > 0 {
-      maxDimension = CGFloat(md)
-    } else {
-      maxDimension = 2048
+  /// Loads the photo, bakes EXIF orientation, and downscales so later steps see upright pixels.
+  private static func loadAndPrepare(
+    path: String,
+    maxDimension: CGFloat
+  ) throws -> (CGImage, Int, Int) {
+    guard let sourceImage = UIImage(contentsOfFile: path) else {
+      throw CutoutError.decode("Cannot decode image at: \(path)")
     }
 
     let uprightImage = try normalizedUpOriented(sourceImage)
@@ -60,12 +74,18 @@ public class ExpoCutoutModule: Module {
       image: uprightImage,
       maxDimension: maxDimension
     )
-
-    // --- 4. Vision request ---
     guard let cgSource = workingImage.cgImage else {
       throw CutoutError.decode("Could not get CGImage from UIImage")
     }
+    return (cgSource, outputWidth, outputHeight)
+  }
 
+  /// Runs Vision, tightens the matte, and renders it as an RGBA bitmap.
+  private static func generateForegroundMask(
+    for cgSource: CGImage,
+    width: Int,
+    height: Int
+  ) throws -> CGImage {
     let request = VNGenerateForegroundInstanceMaskRequest()
     let handler = VNImageRequestHandler(cgImage: cgSource, options: [:])
 
@@ -83,7 +103,6 @@ public class ExpoCutoutModule: Module {
       throw CutoutError.noForeground("Vision found no foreground instances")
     }
 
-    // --- 5. Generate scaled mask ---
     let maskPixelBuffer: CVPixelBuffer
     do {
       maskPixelBuffer = try observation.generateScaledMaskForImage(
@@ -94,10 +113,10 @@ public class ExpoCutoutModule: Module {
       throw CutoutError.vision("generateScaledMaskForImage failed: \(error.localizedDescription)")
     }
 
-    let targetExtent = CGRect(x: 0, y: 0, width: CGFloat(outputWidth), height: CGFloat(outputHeight))
-    var ciMask = CIImage(cvPixelBuffer: maskPixelBuffer)
+    let targetExtent = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+    // Null color space: sample the matte as stored. Do not color-match it into the photo.
+    var ciMask = CIImage(cvPixelBuffer: maskPixelBuffer, options: [.colorSpace: NSNull()])
 
-    // Align mask size to source
     let maskExtent = ciMask.extent
     if maskExtent.size != targetExtent.size {
       let scaleX = targetExtent.width / maskExtent.width
@@ -106,61 +125,32 @@ public class ExpoCutoutModule: Module {
     }
     ciMask = ciMask.cropped(to: targetExtent)
 
-    // --- 6. Tighten mask (cut soft fringe / white halo) then light feather ---
     let refinedMask = refineMask(ciMask, extent: targetExtent)
+      .settingProperties([CIImageOption.colorSpace: NSNull()])
 
-    // --- 7. Composite over explicit transparent background ---
-    let ciSource = CIImage(cgImage: cgSource).cropped(to: targetExtent)
-    let clearBackground = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
-      .cropped(to: targetExtent)
-
-    let blendFilter = CIFilter.blendWithMask()
-    blendFilter.inputImage = ciSource
-    blendFilter.backgroundImage = clearBackground
-    blendFilter.maskImage = refinedMask
-
-    guard let composited = blendFilter.outputImage?.cropped(to: targetExtent) else {
-      throw CutoutError.vision("blendWithMask filter returned nil")
-    }
-
-    // --- 8. Render PNG with explicit alpha ---
-    // Match the CGImage that entered the composite so P3 samples are not
-    // converted to sRGB (which reapplies the transfer curve and lifts midtones).
-    let colorSpace = outputColorSpace(of: cgSource)
-    let context = CIContext(options: [
-      .workingColorSpace: colorSpace,
-      .outputColorSpace: colorSpace,
+    // Null working and output spaces keep mask samples unconverted.
+    // Render as RGBA: an R8 buffer with a nil color space can fail.
+    let ciContext = CIContext(options: [
+      .workingColorSpace: NSNull(),
+      .outputColorSpace: NSNull(),
     ])
+    guard let maskCG = ciContext.createCGImage(refinedMask, from: targetExtent) else {
+      throw CutoutError.encode("Could not render mask to CGImage")
+    }
+    return maskCG
+  }
 
-    guard let outputCGImage = context.createCGImage(
-      composited,
-      from: targetExtent,
-      format: .RGBA8,
-      colorSpace: colorSpace
+  /// Writes a PNG with ImageIO so UIKit does not premultiply the pixels on the way out.
+  private static func writePNG(_ image: CGImage, to url: URL) throws {
+    guard let dest = CGImageDestinationCreateWithURL(
+      url as CFURL, UTType.png.identifier as CFString, 1, nil
     ) else {
-      throw CutoutError.encode("CIContext could not render CGImage")
+      throw CutoutError.encode("Could not create PNG destination")
     }
-
-    let outputUIImage = UIImage(cgImage: outputCGImage, scale: 1, orientation: .up)
-    guard let pngData = outputUIImage.pngData() else {
-      throw CutoutError.encode("pngData() returned nil")
+    CGImageDestinationAddImage(dest, image, nil)
+    guard CGImageDestinationFinalize(dest) else {
+      throw CutoutError.encode("Failed to write PNG")
     }
-
-    // --- 9. Write to temp ---
-    let filename = "cutout-\(UUID().uuidString).png"
-    let outURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-
-    do {
-      try pngData.write(to: outURL, options: .atomic)
-    } catch {
-      throw CutoutError.encode("Failed to write PNG: \(error.localizedDescription)")
-    }
-
-    return [
-      "uri": outURL.absoluteString,
-      "width": outputWidth,
-      "height": outputHeight,
-    ]
   }
 
   // MARK: - Mask refinement
@@ -190,6 +180,93 @@ public class ExpoCutoutModule: Module {
     return (blur.outputImage ?? contrasted).cropped(to: extent)
   }
 
+  // MARK: - Pixel-level mask application
+
+  /// Copies source RGB and writes alpha = mask value, pixel by pixel.
+  /// Source RGB bytes are never modified so brightness is preserved exactly.
+  private static func applyMaskToSource(
+    _ source: CGImage,
+    mask: CGImage,
+    width: Int,
+    height: Int
+  ) throws -> CGImage {
+    let colorSpace = outputColorSpace(of: source)
+    let rect = CGRect(x: 0, y: 0, width: width, height: height)
+
+    // Draw source into RGBA8 with no alpha (noneSkipLast keeps RGB untouched)
+    let srcBI = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.noneSkipLast.rawValue
+    guard let srcCtx = CGContext(
+      data: nil, width: width, height: height,
+      bitsPerComponent: 8, bytesPerRow: width * 4,
+      space: colorSpace, bitmapInfo: srcBI
+    ) else {
+      throw CutoutError.encode("Could not create source CGContext")
+    }
+    srcCtx.draw(source, in: rect)
+    guard let srcData = srcCtx.data else {
+      throw CutoutError.encode("Source CGContext has no pixel data")
+    }
+
+    // Draw mask into RGBA8 in sRGB — we only need the R channel for coverage.
+    let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+    let maskBI = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.noneSkipLast.rawValue
+    guard let maskCtx = CGContext(
+      data: nil, width: width, height: height,
+      bitsPerComponent: 8, bytesPerRow: width * 4,
+      space: srgb, bitmapInfo: maskBI
+    ) else {
+      throw CutoutError.encode("Could not create mask CGContext")
+    }
+    maskCtx.draw(mask, in: rect)
+    guard let maskData = maskCtx.data else {
+      throw CutoutError.encode("Mask CGContext has no pixel data")
+    }
+
+    // Build output: copy source R,G,B verbatim, set A from mask's R channel.
+    let pixelCount = width * height
+    let bufSize = pixelCount * 4
+    let outBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufSize)
+    defer { outBuffer.deallocate() }
+
+    let srcPtr = srcData.assumingMemoryBound(to: UInt8.self)
+    let maskPtr = maskData.assumingMemoryBound(to: UInt8.self)
+
+    for i in 0..<pixelCount {
+      let off = i * 4
+      outBuffer[off]     = srcPtr[off]     // R
+      outBuffer[off + 1] = srcPtr[off + 1] // G
+      outBuffer[off + 2] = srcPtr[off + 2] // B
+      outBuffer[off + 3] = maskPtr[off]    // A ← mask R channel
+    }
+
+    // Create CGImage with non-premultiplied alpha (CGImageAlphaInfo.last)
+    // so RGB values are stored as-is in the PNG file.
+    let outBI = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.last.rawValue
+    guard let provider = CGDataProvider(data: Data(
+      bytes: outBuffer, count: bufSize
+    ) as CFData) else {
+      throw CutoutError.encode("Could not create CGDataProvider")
+    }
+
+    guard let result = CGImage(
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bitsPerPixel: 32,
+      bytesPerRow: width * 4,
+      space: colorSpace,
+      bitmapInfo: CGBitmapInfo(rawValue: outBI),
+      provider: provider,
+      decode: nil,
+      shouldInterpolate: true,
+      intent: .defaultIntent
+    ) else {
+      throw CutoutError.encode("Could not create output CGImage")
+    }
+
+    return result
+  }
+
   // MARK: - Helpers
 
   /// Source profile when it can tag a bitmap; sRGB for untagged or non-output spaces.
@@ -201,6 +278,7 @@ public class ExpoCutoutModule: Module {
   }
 
   /// Draws into an 8-bit context in the source color space so the CGImage stays tagged with it.
+  /// Opaque bitmaps skip premultiplication so RGB is copied as stored.
   private static func redrawInSourceColorSpace(
     _ image: UIImage,
     width: Int,
@@ -218,8 +296,17 @@ public class ExpoCutoutModule: Module {
       colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     }
 
-    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-      | CGBitmapInfo.byteOrder32Big.rawValue
+    let hasAlpha = image.cgImage.map { cgImage -> Bool in
+      switch cgImage.alphaInfo {
+      case .none, .noneSkipFirst, .noneSkipLast:
+        return false
+      default:
+        return true
+      }
+    } ?? false
+    // CGContext cannot draw into non-premultiplied alpha. Opaque photos use noneSkipLast.
+    let alphaInfo: CGImageAlphaInfo = hasAlpha ? .premultipliedLast : .noneSkipLast
+    let bitmapInfo = alphaInfo.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
     guard let context = CGContext(
       data: nil,
       width: width,
